@@ -142,5 +142,17 @@ def prep_mf6_model(org_ws):
     #ext_dict = {""}
 
 
+def setup_interface(org_model_ws):
+    #some fanciness here
+    pass
+
+def run_prior_mc(t_d):
+    pass
+
+def make_kickass_figs(m_d):
+    pass
+
+
 if __name__ == "__main__":
-    prep_mf6_model("temp_daily")
+    #prep_mf6_model("temp_daily")
+    setup_interface()
