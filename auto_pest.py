@@ -10,7 +10,7 @@ import pyemu
 
 def prep_mf6_model(org_ws):
     
-    if True:#not os.path.exists(os.path.join(org_ws,"freyberg6.nam")):
+    if not os.path.exists(os.path.join(org_ws,"freyberg6.nam")):
 
         #first mod the nam file and the dumbass last reach bottom - sigh
         m = flopy.modflow.Modflow.load("freyberg.nam",model_ws=org_ws,check=False)
@@ -38,7 +38,7 @@ def prep_mf6_model(org_ws):
         shutil.rmtree(new_ws)
     os.mkdir(new_ws)
     sim = flopy.mf6.MFSimulation.load(sim_ws=org_ws)
-    sim.simulation_data.mfpath.set_sim_path("test")
+    sim.simulation_data.mfpath.set_sim_path(new_ws)
     sim.set_all_data_external()
 
     sim.name_file.continue_ = True
@@ -61,37 +61,26 @@ def prep_mf6_model(org_ws):
     obs_df2.loc[:,"name"] = obs_df2.apply(lambda x: "trgw_{0}_{1}_{2}".\
         format(x.layer-1,x.row-1,x.col-1),axis=1)
 
-    obs_df = pd.concat([obs_df,obs_df2])
+    obs_df = pd.concat([obs_df, obs_df2])
+    obs_df['idxs'] = list(zip(obs_df.layer - 1, obs_df.row - 1, obs_df.col - 1))
+    obs = flopy.mf6.ModflowUtlobs(
+        m, pname='head_obs', digits=10, print_input=True,
+        continuous={
+            'heads.csv':
+                obs_df.loc[:, ["name", "obstype", "idxs"]].to_records(
+                    index=False)})
 
-    #head_obs = {"head_obs.csv":[("trgw_{0}_{1}".format(r,c),"NPF",(2,r-1,c-1)) for r,c in zip(obs_df.row,obs_df.col)]}
-    with open(os.path.join(new_ws,"head.obs"),'w') as f:
-        f.write("BEGIN CONTINUOUS FILEOUT heads.csv\n")
-        obs_df.loc[:,["name","obstype","layer","row","col"]].to_csv(f,sep=' ',line_terminator='\n',
-            index=False,header=False,mode="a")
-        f.write("END CONTINUOUS\n")
-
-    props_3d = [("npf","k"),("npf","k33"),("sto","ss"),("sto","sy")]
-    props_trans = [("rch","recharge")]
+    # props_3d = [("npf","k"),("npf","k33"),("sto","ss"),("sto","sy")]
+    # props_trans = [("rch","recharge")]
     #print(dir(m.dis.nlay))
     #print(m.dis.nlay.data)
-    print(type(m.rch.recharge))
+    # print(type(m.rch.recharge))
 
-    for pack,attr in props_3d:
+    # for pack,attr in props_3d:
         #print(m.get_package(pack).__getattribute__(attr))
-        for k in range(m.dis.nlay.data):
-            filename = "{0}_{1}_{2}.dat".format(pack,attr,k)
-            m.get_package(pack).__getattribute__(attr).store_as_external_file(filename,layer=k)
-
-    sim.write_simulation()
-    lines = open(os.path.join(new_ws,"freyberg6.nam"),'r').readlines()
-    new_lines = []
-    for line in lines:
-        if line.strip() == "END Packages":
-            new_lines.append("   obs6 head.obs\n")
-        new_lines.append(line)
-    with open(os.path.join(new_ws,"freyberg6.nam"),'w') as f:
-        [f.write(line) for line in new_lines]
-        f.flush()
+        # for k in range(m.dis.nlay.data):
+        #     filename = "{0}_{1}_{2}.dat".format(pack,attr,k)
+        #     m.get_package(pack).__getattribute__(attr).store_as_external_file(filename,layer=k)
 
     # mod sfr
     # lines = open(os.path.join(new_ws,"freyberg6.sfr"),'r').readlines()
@@ -124,19 +113,31 @@ def prep_mf6_model(org_ws):
     #             f.write(line)
     #         iline += 1
 
-    lines = open(os.path.join(new_ws,'freyberg6.sfr_packagedata.txt'),'r').readlines()
-    with open(os.path.join(new_ws,'freyberg6.sfr_packagedata.txt'),'w') as f:
-        for i,line in enumerate(lines):
-            bn = "headwater"
-            if i > int(m.dis.nrow.data / 2):
-                bn = "tailwater"
-            f.write(line.strip() + " " + bn + "\n")
+    # lines = open(os.path.join(new_ws,'freyberg6.sfr_packagedata.txt'),'r').readlines()
+    # with open(os.path.join(new_ws,'freyberg6.sfr_packagedata.txt'),'w') as f:
+    #     for i,line in enumerate(lines):
+    #         bn = "headwater"
+    #         if i > int(m.dis.nrow.data / 2):
+    #             bn = "tailwater"
+    #         f.write(line.strip() + " " + bn + "\n")
+    #
+    #
+    # with open(os.path.join(new_ws,"sfr.obs"),'w') as f:
+    #     f.write("BEGIN CONTINUOUS FILEOUT sfr.csv\nheadwater sfr headwater\n")
+    #     f.write("tailwater sfr tailwater\ngage_1 inflow 40\nEND CONTINUOUS")
 
+    m.sfr.boundnames = True
+    m.sfr.obs.initialize(continuous={
+        'sfr.csv': [('headwater', 'SFR', 'headwater'),
+                    ('tailwater', 'SFR', 'tailwater'),
+                    ('gage_1', 'inflow', 40)]}, filename='sfr.obs')
+    pkd = m.sfr.packagedata.array.copy()
+    pkd['boundname'] = 'headwater'
+    pkd['boundname'][pkd.rno > int(m.dis.nrow.data / 2)] = 'tailwater'
+    m.sfr.packagedata = pkd
 
-    with open(os.path.join(new_ws,"sfr.obs"),'w') as f:
-        f.write("BEGIN CONTINUOUS FILEOUT sfr.csv\nheadwater sfr headwater\n")
-        f.write("tailwater sfr tailwater\ngage_1 inflow 40\nEND CONTINUOUS")
-
+    sim.set_all_data_external()
+    sim.write_simulation()
     #shutil.copy2(os.path.join(org_ws,"mf6.exe"),os.path.join(new_ws,"mf6.exe"))
     pyemu.os_utils.run("mf6",cwd=new_ws)
     #ext_dict = {""}
@@ -154,5 +155,5 @@ def make_kickass_figs(m_d):
 
 
 if __name__ == "__main__":
-    #prep_mf6_model("temp_daily")
-    setup_interface()
+    prep_mf6_model("temp_monthly")
+    # setup_interface()
