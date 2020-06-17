@@ -22,7 +22,11 @@ def prep_mf6_model(org_ws):
         print(cell_bot,last_reach_bot)
         if last_reach_bot <= cell_bot:
             m.sfr.reach_data["strtop"][-1] += 0.001
-        m.wel.stress_period_data[7]["flux"] = m.wel.stress_period_data[8]["flux"] * 1.01
+        #m.wel.stress_period_data[7]["flux"] = m.wel.stress_period_data[8]["flux"] * 1.01
+        for kper in range(1,m.nper):
+            m.wel.stress_period_data[kper]["flux"] = m.wel.stress_period_data[0]["flux"]
+            m.rch.rech[kper] = m.rch.rech[0].array
+
         m.external_path = "."
 
         m.write_input()
@@ -212,10 +216,10 @@ def make_kickass_figs():
     oe_f = pd.read_csv(os.path.join(m_d_f,"freyberg.0.obs.csv"),index_col=0)
 
     fig,axes = plt.subplots(1,2,figsize=(8,4))
-    forecasts = ["sfr_usecol:headwater_time:732.0","sfr_usecol:tailwater_time:732.0"]
+    forecasts = ["sfr_usecol:headwater_time:610.0","sfr_usecol:tailwater_time:610.0"]
     labels = ["A) headwater flux","B) tailwater_flux"]
-    xmin = oe_c.loc[:,forecasts].min().min()
-    xmax = oe_c.loc[:, forecasts].max().max()
+    xmin = min(oe_c.loc[:,forecasts].min().min(),oe_f.loc[:,forecasts].min().min())
+    xmax = max(oe_c.loc[:, forecasts].max().max(),oe_f.loc[:, forecasts].max().max())
 
     for forecast,ax,label in zip(forecasts,axes,labels):
         oe_c.loc[:,forecast].hist(ax=ax,bins=15,edgecolor="none",facecolor="b", alpha=0.5,label="coarse discretization")
@@ -236,12 +240,12 @@ def make_kickass_figs():
 
 if __name__ == "__main__":
 
-    prep_mf6_model("temp_monthly")
-    setup_interface("temp_monthly_test")
+    #prep_mf6_model("temp_monthly")
+    setup_interface("temp_monthly_test",num_reals=20)
     run_prior_mc("monthly_template")
 
-    prep_mf6_model("temp_daily")
-    setup_interface("temp_daily_test")
+    #prep_mf6_model("temp_daily")
+    setup_interface("temp_daily_test",num_reals=20)
     run_prior_mc("daily_template")
 
     make_kickass_figs()
