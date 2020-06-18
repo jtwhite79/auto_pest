@@ -10,6 +10,17 @@ import flopy
 import pyemu
 
 
+unit_dict = {"head":"sw-gw flux $\\frac{ft^3}{d}$",
+                "tail": "sw-gw flux $\\frac{ft^3}{d}$",
+                "trgw" : "gw level $ft$",
+                "gage" : "sw flux $\\frac{ft^3}{d}$"}
+label_dict = {"head": "headwater",
+             "tail": "tailwater",
+             "trgw_2_2_9": "gw_1",
+              "trgw_2_33_7": "gw_2",
+              "trgw_0_9_1" : "gw_3",
+             "gage": "sw_1"}
+
 def prep_mf6_model(org_ws):
     
     #if not os.path.exists(os.path.join(org_ws,"freyberg6.nam")):
@@ -212,10 +223,71 @@ def make_kickass_figs():
     m_d_c = "monthly_master"
     m_d_f = "daily_master"
 
+    sim = flopy.mf6.MFSimulation.load(sim_ws=m_d_f)
+    m = sim.get_model("freyberg6")
+    redis_fac = m.dis.nrow.data / 40
+
+    pst_c = pyemu.Pst(os.path.join(m_d_c,"freyberg.pst"))
+    pst_f = pyemu.Pst(os.path.join(m_d_f, "freyberg.pst"))
+
     oe_c = pd.read_csv(os.path.join(m_d_c,"freyberg.0.obs.csv"),index_col=0)
     oe_f = pd.read_csv(os.path.join(m_d_f,"freyberg.0.obs.csv"),index_col=0)
 
+    obs_c = pst_c.observation_data
+    hds_c = obs_c.loc[obs_c.obsnme.apply(lambda x: x.startswith("hds")),:].copy()
+    hds_c.loc[:, "k"] = hds_c.obsnme.apply(lambda x: int(x.split('_')[2]))
+    hds_c.loc[:, "time"] = hds_c.obsnme.apply(lambda x: float(x.split('_')[-1].split(':')[1]))
+
+    #hds_c = hds_c.loc[hds_c.k == 2]
+
+    obs_f = pst_f.observation_data
+    hds_f = obs_f.loc[obs_f.obsnme.apply(lambda x: x.startswith("hds")), :].copy()
+    hds_f.loc[:, "k"] = hds_f.obsnme.apply(lambda x: int(x.split('_')[2]))
+    #hds_f = hds_f.loc[hds_f.k == 2]
+    hds_f.loc[:,"i"] = hds_f.obsnme.apply(lambda x: int(x.split('_')[3]))
+    hds_f.loc[:, "j"] = hds_f.obsnme.apply(lambda x: int(x.split('_')[4]))
+    hds_f.loc[:, "time"] = hds_f.obsnme.apply(lambda x: float(x.split('_')[-1].split(':')[1]))
+
+    hds_f.loc[:,"org_i"] = (hds_f.i / redis_fac).apply(np.int)
+    hds_f.loc[:, "org_j"] = (hds_f.j / redis_fac).apply(np.int)
+    hds_f.loc[:,"org_obgnme"] = hds_f.apply(lambda x: "hds_usecol:trgw_{0}_{1}_{2}".format(x.k,x.org_i,x.org_j),axis=1)
+
+    grp_c = set(hds_c.obgnme.unique())
+
+    grp_f = set(hds_f.org_obgnme.unique())
+
+    assert len(grp_f.symmetric_difference(grp_c)) == 0
+
+    grp_c = hds_c.obgnme.unique()
+    grp_c.sort()
+    print(grp_c)
+    print(label_dict)
+    grp_c = [g for g in grp_c if g.replace("hds_usecol:","") in label_dict]
+    print(grp_c)
+
+    fig,axes = plt.subplots(len(grp_c),1,figsize=(8,8))
+    for grp,ax in zip(grp_c,axes):
+        c = hds_c.loc[hds_c.obgnme==grp,:].copy()
+        c.sort_values(by="time",inplace=True)
+        f = hds_f.loc[hds_f.org_obgnme == grp,:].copy()
+        f.sort_values(by="time",inplace=True)
+        oe_c_g = oe_c.loc[:,c.obsnme]
+        oe_f_g = oe_f.loc[:, f.obsnme]
+        [ax.plot(c.time.values,oe_c_g.loc[i,:].values,color='b',alpha=0.5,lw=0.1) for i in oe_c_g.index]
+        #[print(f.time.values, oe_f_g.loc[i, :].values) for i in oe_f_g.index]
+        [ax.plot(f.time.values, oe_f_g.loc[i, :].values, color='g', alpha=0.5, lw=0.1) for i in oe_f_g.index]
+        ax.set_ylabel("simulated groundwater level ($L$)")
+        ax.set_xlabel("simulation time ($T$)")
+        ax.set_title(grp,loc="left")
+    plt.savefig("obs_prior.pdf")
+    plt.close(fig)
+
+
     fig,axes = plt.subplots(1,2,figsize=(8,4))
+
+
+
+
     forecasts = ["sfr_usecol:headwater_time:610.0","sfr_usecol:tailwater_time:610.0"]
     labels = ["A) headwater flux","B) tailwater_flux"]
     xmin = min(oe_c.loc[:,forecasts].min().min(),oe_f.loc[:,forecasts].min().min())
@@ -240,12 +312,12 @@ def make_kickass_figs():
 
 if __name__ == "__main__":
 
-    prep_mf6_model("temp_monthly")
-    setup_interface("temp_monthly_test",num_reals=100)
-    run_prior_mc("monthly_template")
-
-    prep_mf6_model("temp_daily")
-    setup_interface("temp_daily_test",num_reals=100)
-    run_prior_mc("daily_template")
+    # prep_mf6_model("temp_monthly")
+    # setup_interface("temp_monthly_test",num_reals=100)
+    # run_prior_mc("monthly_template")
+    #
+    # prep_mf6_model("temp_daily")
+    # setup_interface("temp_daily_test",num_reals=100)
+    # run_prior_mc("daily_template")
 
     make_kickass_figs()
