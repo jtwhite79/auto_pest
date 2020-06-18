@@ -12,8 +12,8 @@ import pyemu
 
 def prep_mf6_model(org_ws):
     
-    if not os.path.exists(os.path.join(org_ws,"freyberg6.nam")):
-
+    #if not os.path.exists(os.path.join(org_ws,"freyberg6.nam")):
+    if True:
         #first mod the nam file and the dumbass last reach bottom - sigh
         m = flopy.modflow.Modflow.load("freyberg.nam",model_ws=org_ws,check=False)
         print(m.sfr.reach_data.dtype)
@@ -240,11 +240,11 @@ def make_kickass_figs():
 
 if __name__ == "__main__":
 
-    #prep_mf6_model("temp_monthly")
+    prep_mf6_model("temp_monthly")
     setup_interface("temp_monthly_test",num_reals=20)
     run_prior_mc("monthly_template")
 
-    #prep_mf6_model("temp_daily")
+    prep_mf6_model("temp_daily")
     setup_interface("temp_daily_test",num_reals=20)
     run_prior_mc("daily_template")
 
