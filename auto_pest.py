@@ -24,8 +24,8 @@ def prep_mf6_model(org_ws):
             m.sfr.reach_data["strtop"][-1] += 0.001
         #m.wel.stress_period_data[7]["flux"] = m.wel.stress_period_data[8]["flux"] * 1.01
         for kper in range(1,m.nper):
-            m.wel.stress_period_data[kper]["flux"] = m.wel.stress_period_data[0]["flux"]
-            m.rch.rech[kper] = m.rch.rech[0].array
+            m.wel.stress_period_data[kper]["flux"] = m.wel.stress_period_data[0]["flux"] * (1+ (np.random.random() * 0.001))
+            m.rch.rech[kper] = m.rch.rech[0].array * (1 + (np.random.random() * 0.001))
 
         m.external_path = "."
 
@@ -241,11 +241,11 @@ def make_kickass_figs():
 if __name__ == "__main__":
 
     prep_mf6_model("temp_monthly")
-    setup_interface("temp_monthly_test",num_reals=20)
+    setup_interface("temp_monthly_test",num_reals=100)
     run_prior_mc("monthly_template")
 
     prep_mf6_model("temp_daily")
-    setup_interface("temp_daily_test",num_reals=20)
+    setup_interface("temp_daily_test",num_reals=100)
     run_prior_mc("daily_template")
 
     make_kickass_figs()
