@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import flopy
 import pyemu
 
+abet = string.ascii_uppercase
 
 unit_dict = {"head":"sw-gw flux $\\frac{ft^3}{d}$",
                 "tail": "sw-gw flux $\\frac{ft^3}{d}$",
@@ -133,24 +134,32 @@ def setup_interface(org_ws,num_reals=100):
                         prefix="hds")
 
     # probs want to setup several different variograms for each prop?
-    v = pyemu.geostats.ExpVario(contribution=1.0,a=1000)
-    gr_gs = pyemu.geostats.GeoStruct(variograms=v)
+    grid_v = pyemu.geostats.ExpVario(contribution=1.0,a=500)
+    grid_gs = pyemu.geostats.GeoStruct(variograms=grid_v)
+    pp_v = pyemu.geostats.ExpVario(contribution=1.0, a=2000)
+    pp_gs = pyemu.geostats.GeoStruct(variograms=pp_v)
+    rch_v = pyemu.geostats.ExpVario(contribution=1.0, a=1000)
+    rch_gs = pyemu.geostats.GeoStruct(variograms=rch_v)
     rch_temporal_gs = pyemu.geostats.GeoStruct(variograms=pyemu.geostats.ExpVario(contribution=1.0,a=60))
     pf.extra_py_imports.append('flopy')
     ib = m.dis.idomain[0].array
     tags = {"npf_k_":[0.1,10.],"npf_k33_":[.1,10],"sto_ss":[.1,10],"sto_sy":[.9,1.1],"rch_recharge":[.5,1.5]}
     dts = pd.to_datetime("1-1-2018") + pd.to_timedelta(np.cumsum(sim.tdis.perioddata.array["perlen"]),unit="d")
- 
+
     for tag,bnd in tags.items():
         lb,ub = bnd[0],bnd[1]
-        arr_files = [f for f in os.listdir(org_ws) if tag in f and f.endswith(".txt")]
+        arr_files = [f for f in os.listdir(template_ws) if tag in f and f.endswith(".txt")]
+
         if len(arr_files) == 0:
             print("warning: no array files found for ",tag)
             continue
+        for arr_file in arr_files:
+            arr = np.loadtxt(os.path.join(template_ws,arr_file)).reshape(ib.shape)
+            np.savetxt(os.path.join(template_ws,arr_file),arr,fmt="%15.6E")
         if "rch" in tag:
             pf.add_parameters(filenames=arr_files, par_type="grid", par_name_base="rch_gr",
                               pargp="rch_gr", zone_array=ib, upper_bound=ub, lower_bound=lb,
-                              geostruct=gr_gs)
+                              geostruct=rch_gs)
             for arr_file in arr_files:
                 kper = int(arr_file.split('.')[1].split('_')[-1]) - 1
                 pf.add_parameters(filenames=arr_file,par_type="constant",par_name_base=arr_file.split('.')[1]+"_cn",
@@ -160,10 +169,10 @@ def setup_interface(org_ws,num_reals=100):
             for arr_file in arr_files:
                 pf.add_parameters(filenames=arr_file,par_type="grid",par_name_base=arr_file.split('.')[1]+"_gr",
                                   pargp=arr_file.split('.')[1]+"_gr",zone_array=ib,upper_bound=ub,lower_bound=lb,
-                                  geostruct=gr_gs)
+                                  geostruct=grid_gs)
                 pf.add_parameters(filenames=arr_file, par_type="pilotpoints", par_name_base=arr_file.split('.')[1]+"_pp",
                                   pargp=arr_file.split('.')[1]+"_pp", zone_array=ib,upper_bound=ub,lower_bound=lb,
-                                  pp_space=5 * redis_fac)
+                                  pp_space=int(5 * redis_fac),geostruct=pp_gs)
 
     
     list_files = [f for f in os.listdir(org_ws) if "freyberg6.wel_stress_period_data_" in f and f.endswith(".txt")]
@@ -177,7 +186,7 @@ def setup_interface(org_ws,num_reals=100):
         # add temporally indep, but spatially correlated wel flux pars
         pf.add_parameters(filenames=list_file, par_type="grid", par_name_base="wel_grid_{0}".format(kper),
                           pargp="wel_{0}".format(kper), index_cols=[0, 1, 2], use_cols=[3],
-                          upper_bound=1.5, lower_bound=0.5, geostruct=gr_gs)
+                          upper_bound=1.5, lower_bound=0.5)
 
     # test non spatial idx in list like
     pf.add_parameters(filenames="freyberg6.sfr_packagedata.txt", par_name_base="sfr_rhk",
@@ -252,6 +261,13 @@ def make_kickass_figs():
     hds_f.loc[:, "org_j"] = (hds_f.j / redis_fac).apply(np.int)
     hds_f.loc[:,"org_obgnme"] = hds_f.apply(lambda x: "hds_usecol:trgw_{0}_{1}_{2}".format(x.k,x.org_i,x.org_j),axis=1)
 
+    gage_c = obs_c.loc[obs_c.obsnme.apply(lambda x: "gage" in x),:].copy()
+    gage_c.loc[:,"time"] = gage_c.obsnme.apply(lambda x: float(x.split(':')[-1]))
+    gage_f = obs_f.loc[obs_f.obsnme.apply(lambda x: "gage" in x), :].copy()
+    gage_f.loc[:, "time"] = gage_f.obsnme.apply(lambda x: float(x.split(':')[-1]))
+    gage_c.sort_values(by="time",inplace=True)
+    gage_f.sort_values(by="time", inplace=True)
+
     grp_c = set(hds_c.obgnme.unique())
 
     grp_f = set(hds_f.org_obgnme.unique())
@@ -265,59 +281,73 @@ def make_kickass_figs():
     grp_c = [g for g in grp_c if g.replace("hds_usecol:","") in label_dict]
     print(grp_c)
 
-    fig,axes = plt.subplots(len(grp_c),1,figsize=(8,8))
-    for grp,ax in zip(grp_c,axes):
+    fig,axes = plt.subplots(len(grp_c)+1,1,figsize=(8,8))
+    tags = ["trgw_2_2_9","trgw_2_33_7","trgw_0_9_1"]
+    labels = ["gw_1","gw_2","gw_3"]
+    for i,(tag,label,ax) in enumerate(zip(tags,labels,axes)):
+    #for i,(grp,ax) in enumerate(zip(grp_c,axes)):
+        grp = None
+        for g in grp_c:
+            if tag in g:
+                grp = g
+                break
         c = hds_c.loc[hds_c.obgnme==grp,:].copy()
         c.sort_values(by="time",inplace=True)
         f = hds_f.loc[hds_f.org_obgnme == grp,:].copy()
         f.sort_values(by="time",inplace=True)
-        oe_c_g = oe_c.loc[:,c.obsnme]
-        oe_f_g = oe_f.loc[:, f.obsnme]
-        [ax.plot(c.time.values,oe_c_g.loc[i,:].values,color='b',alpha=0.5,lw=0.1) for i in oe_c_g.index]
+        oe_c_g = oe_c.loc[:,c.obsnme].copy()
+        oe_f_g = oe_f.loc[:, f.obsnme].copy()
+        oe_c_g.values[oe_c_g.values < 30] = np.nan
+        oe_f_g.values[oe_f_g.values < 30] = np.nan
+        # lab = None
+        # for l,t in label_dict.items():
+        #     if l in grp:
+        #         lab = t
+        [ax.plot(c.time.values,oe_c_g.loc[i,:].values,color='b',alpha=0.7,lw=1.0,dashes=(2,2)) for i in oe_c_g.index]
         #[print(f.time.values, oe_f_g.loc[i, :].values) for i in oe_f_g.index]
         [ax.plot(f.time.values, oe_f_g.loc[i, :].values, color='g', alpha=0.5, lw=0.1) for i in oe_f_g.index]
         ax.set_ylabel("simulated groundwater level ($L$)")
         ax.set_xlabel("simulation time ($T$)")
-        ax.set_title(grp,loc="left")
+        ax.set_title("{0}) {1}".format(abet[i],label),loc="left")
+        #ax.set_ylim(34,40)
+    [axes[-1].plot(gage_c.time.values,oe_c.loc[i,gage_c.obsnme].values,color='b',alpha=0.7,lw=1.0,dashes=(2,2)) for i in oe_c.index]
+    [axes[-1].plot(gage_f.time.values, oe_f.loc[i, gage_f.obsnme].values, color='g', alpha=0.5, lw=0.1) for i in
+     oe_f.index]
+    axes[-1].set_ylabel("simulated surfacewaer flow ($\\frac{L^3}{T}$)")
+    axes[-1].set_xlabel("simulation time ($T$)")
+    axes[-1].set_title("D) sw_1", loc="left")
+    plt.tight_layout()
     plt.savefig("obs_prior.pdf")
     plt.close(fig)
 
 
     fig,axes = plt.subplots(1,2,figsize=(8,4))
-
-
-
-
     forecasts = ["sfr_usecol:headwater_time:610.0","sfr_usecol:tailwater_time:610.0"]
     labels = ["A) headwater flux","B) tailwater_flux"]
     xmin = min(oe_c.loc[:,forecasts].min().min(),oe_f.loc[:,forecasts].min().min())
     xmax = max(oe_c.loc[:, forecasts].max().max(),oe_f.loc[:, forecasts].max().max())
 
     for forecast,ax,label in zip(forecasts,axes,labels):
-        oe_c.loc[:,forecast].hist(ax=ax,bins=15,edgecolor="none",facecolor="b", alpha=0.5,label="coarse discretization")
-        oe_f.loc[:, forecast].hist(ax=ax, bins=15, edgecolor="none", facecolor="g", alpha=0.5, label="fine discretization")
+        oe_c.loc[:,forecast].hist(ax=ax,bins=15,edgecolor="none",facecolor="b", alpha=0.5,label="lower resolution")
+        oe_f.loc[:, forecast].hist(ax=ax, bins=15, edgecolor="none", facecolor="g", alpha=0.5, label="higher resolution")
         ax.set_yticks([])
         ax.set_xlabel("surface-water/groundwater flux ($\\frac{L}{T}$)")
         ax.set_title(label,loc="left")
         ax.set_xlim(xmin,xmax)
         ax.legend(loc="upper right")
         ax.grid(False)
-
+    plt.tight_layout()
     plt.savefig("forecast_prior.pdf")
     plt.close(fig)
-
-
-
-
 
 if __name__ == "__main__":
 
     # prep_mf6_model("temp_monthly")
-    # setup_interface("temp_monthly_test",num_reals=100)
-    # run_prior_mc("monthly_template")
+    #setup_interface("temp_monthly_test",num_reals=100)
+    #run_prior_mc("monthly_template")
     #
-    # prep_mf6_model("temp_daily")
-    # setup_interface("temp_daily_test",num_reals=100)
-    # run_prior_mc("daily_template")
+    #prep_mf6_model("temp_daily")
+    #setup_interface("temp_daily_test",num_reals=100)
+    #run_prior_mc("daily_template")
 
     make_kickass_figs()
