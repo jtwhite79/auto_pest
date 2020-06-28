@@ -282,9 +282,12 @@ def make_kickass_figs():
     print(grp_c)
 
     fig,axes = plt.subplots(len(grp_c)+1,1,figsize=(8,8))
-    tags = ["trgw_2_2_9","trgw_2_33_7","trgw_0_9_1"]
-    labels = ["gw_1","gw_2","gw_3"]
-    for i,(tag,label,ax) in enumerate(zip(tags,labels,axes)):
+    #tags = ["trgw_2_2_9","trgw_2_33_7","trgw_0_9_1"]
+    #labels = ["gw_1","gw_2","gw_3"]
+    tags = ["trgw_0_9_1"]
+    labels = ["gw_3"]
+    np.random.seed(1111)
+    for i,(tag,label) in enumerate(zip(tags,labels)):
     #for i,(grp,ax) in enumerate(zip(grp_c,axes)):
         grp = None
         for g in grp_c:
@@ -299,23 +302,45 @@ def make_kickass_figs():
         oe_f_g = oe_f.loc[:, f.obsnme].copy()
         oe_c_g.values[oe_c_g.values < 30] = np.nan
         oe_f_g.values[oe_f_g.values < 30] = np.nan
+
+        tr = oe_f_g.iloc[0,:].values.copy()
+        tr += np.random.normal(0,0.15,tr.shape[0])
+
         # lab = None
         # for l,t in label_dict.items():
         #     if l in grp:
         #         lab = t
-        [ax.plot(c.time.values,oe_c_g.loc[i,:].values,color='b',alpha=0.7,lw=1.0,dashes=(2,2)) for i in oe_c_g.index]
+        ax = axes[i]
+        [ax.plot(c.time.values,oe_c_g.loc[i,:].values,color='b',alpha=0.5,lw=0.2) for i in oe_c_g.index]
+        ax.plot(f.time.values,tr,color="r",lw=1.5)
         #[print(f.time.values, oe_f_g.loc[i, :].values) for i in oe_f_g.index]
-        [ax.plot(f.time.values, oe_f_g.loc[i, :].values, color='g', alpha=0.5, lw=0.1) for i in oe_f_g.index]
         ax.set_ylabel("simulated groundwater level ($L$)")
         ax.set_xlabel("simulation time ($T$)")
-        ax.set_title("{0}) {1}".format(abet[i],label),loc="left")
+        ax.set_title("{0}) {1} lower resolution".format(abet[i], label), loc="left")
+        ax = axes[i+1]
+        [ax.plot(f.time.values, oe_f_g.loc[i, :].values, color='g', alpha=0.5, lw=0.2) for i in oe_f_g.index]
+        ax.plot(f.time.values, tr, color="r", lw=1.5)
+        ax.set_ylabel("simulated groundwater level ($L$)")
+        ax.set_xlabel("simulation time ($T$)")
+        ax.set_title("{0}) {1} higher resolution".format(abet[i],label),loc="left")
         #ax.set_ylim(34,40)
-    [axes[-1].plot(gage_c.time.values,oe_c.loc[i,gage_c.obsnme].values,color='b',alpha=0.7,lw=1.0,dashes=(2,2)) for i in oe_c.index]
-    [axes[-1].plot(gage_f.time.values, oe_f.loc[i, gage_f.obsnme].values, color='g', alpha=0.5, lw=0.1) for i in
+
+    tr = oe_f.loc[:,gage_f.obsnme].iloc[0,:].values.copy()
+    tr += (tr * 0.05 * np.random.normal(0,1,tr.shape[0]))
+    [axes[-2].plot(gage_c.time.values,oe_c.loc[i,gage_c.obsnme].values,color='b',alpha=0.5,lw=0.2) for i in oe_c.index]
+    axes[-2].plot(gage_f.time.values,tr,color='r',lw=1.5)
+    axes[-2].set_ylabel("simulated surface water flow ($\\frac{L^3}{T}$)")
+    axes[-2].set_xlabel("simulation time ($T$)")
+    axes[-2].set_title("C) sw_1 lower resolution", loc="left")
+    axes[-2].set_ylim(1000,5500)
+
+    [axes[-1].plot(gage_f.time.values, oe_f.loc[i, gage_f.obsnme].values, color='g', alpha=0.5, lw=0.2) for i in
      oe_f.index]
+    axes[-1].plot(gage_f.time.values, tr, color='r', lw=1.5)
     axes[-1].set_ylabel("simulated surfacewaer flow ($\\frac{L^3}{T}$)")
     axes[-1].set_xlabel("simulation time ($T$)")
-    axes[-1].set_title("D) sw_1", loc="left")
+    axes[-1].set_title("D) sw_1 higher resolution", loc="left")
+    axes[-1].set_ylim(1000, 5500)
     plt.tight_layout()
     plt.savefig("obs_prior.pdf")
     plt.close(fig)
@@ -328,17 +353,57 @@ def make_kickass_figs():
     xmax = max(oe_c.loc[:, forecasts].max().max(),oe_f.loc[:, forecasts].max().max())
 
     for forecast,ax,label in zip(forecasts,axes,labels):
-        oe_c.loc[:,forecast].hist(ax=ax,bins=15,edgecolor="none",facecolor="b", alpha=0.5,label="lower resolution")
-        oe_f.loc[:, forecast].hist(ax=ax, bins=15, edgecolor="none", facecolor="g", alpha=0.5, label="higher resolution")
+        oe_c.loc[:,forecast].hist(ax=ax,bins=15,edgecolor="none",facecolor="b", alpha=0.5,label="lower resolution",density=True)
+        oe_f.loc[:, forecast].hist(ax=ax, bins=15, edgecolor="none", facecolor="g", alpha=0.5, label="higher resolution",density=True)
         ax.set_yticks([])
-        ax.set_xlabel("surface-water/groundwater flux ($\\frac{L}{T}$)")
+        ax.set_xlabel("surface-water/groundwater flux ($\\frac{L^3}{T}$)")
         ax.set_title(label,loc="left")
         ax.set_xlim(xmin,xmax)
         ax.legend(loc="upper right")
         ax.grid(False)
+        ax.set_ylabel("increasing probability density")
     plt.tight_layout()
     plt.savefig("forecast_prior.pdf")
     plt.close(fig)
+
+def write_par_sum(pst_file):
+    pst = pyemu.Pst(pst_file)
+    par = pst.parameter_data
+    par.loc[par.pargp.str.startswith("wel"),"pargp"] = "wel"
+    def group_namer(grp):
+        name = ''
+        if "layer" in grp:
+            name += "Layer " + grp.split('layer')[1][0]
+        if "gr" in grp:
+            name += " grid-scale"
+        elif "pp" in grp:
+            name += " pilot points"
+        elif "const" in grp:
+            name += " constant"
+        if "_k_" in grp:
+            name += " HK"
+        elif "k33" in grp:
+            name += " VK"
+        elif "ss" in grp:
+            name += " SS"
+        elif "sy" in grp:
+            name += " SY"
+        elif "rch" in grp:
+            name += " recharge"
+        if "sfr" in grp:
+            name = " SFR stream-bed conductance"
+        if "twel" in grp:
+            name = "temporal wel flux constants"
+        #elif "wel" in grp:
+        #    name = "grid-scale wel flux for stress period " + grp.split('_')[1]
+        elif "wel" in grp:
+            name = "grid-scale wel flux"
+        return name
+
+    ugrps = pst.parameter_data.pargp.unique()
+    name_dict = {ug:group_namer(ug) for ug in ugrps}
+    pst.write_par_summary_table(os.path.split(pst_file)[0] + "_par_sum.tex",group_names=name_dict)
+
 
 if __name__ == "__main__":
 
@@ -351,3 +416,6 @@ if __name__ == "__main__":
     #run_prior_mc("daily_template")
 
     make_kickass_figs()
+    #write_par_sum(os.path.join("monthly_master","freyberg.pst"))
+    #write_par_sum(os.path.join("daily_master", "freyberg.pst"))
+
