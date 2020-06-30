@@ -37,7 +37,9 @@ def prep_mf6_model(org_ws):
         #m.wel.stress_period_data[7]["flux"] = m.wel.stress_period_data[8]["flux"] * 1.01
         for kper in range(1,m.nper):
             m.wel.stress_period_data[kper]["flux"] = m.wel.stress_period_data[0]["flux"] * (1+ (np.random.random() * 0.001))
-            m.rch.rech[kper] = m.rch.rech[0].array * (1 + (np.random.random() * 0.001))
+            #m.rch.rech[kper] = m.rch.rech[0].array * (1 + (np.random.random() * 0.001))
+            #m.wel.stress_period_data[kper]["flux"] *= (1+ (np.random.random() * 0.001))
+            m.rch.rech[kper] *= (1 + (np.random.random() * 0.001))
 
         m.external_path = "."
 
@@ -49,7 +51,6 @@ def prep_mf6_model(org_ws):
                     line = line.strip() + " REPLACE\n"
                 f.write(line)
         pyemu.os_utils.run("mf5to6 freyberg_mod.nam freyberg6",cwd=org_ws)
-
 
     new_ws = org_ws + "_test"
     if os.path.exists(new_ws):
@@ -105,6 +106,33 @@ def prep_mf6_model(org_ws):
     pyemu.os_utils.run("mf6",cwd=new_ws)
     #ext_dict = {""}
 
+    if "monthly" in org_ws:
+        # sample the recharge arrays from the daily model to the monthly model
+        daily_ws = "temp_daily_test"
+        assert os.path.exists(daily_ws)
+        rch_files = [f for f in os.listdir(daily_ws) if "rch_recharge_" in f and f.endswith(".txt")]
+        rch_df = pd.DataFrame({"filename":rch_files})
+        rch_df.loc[:,"sp"] = rch_df.filename.apply(lambda x: int(x.split('.')[1].split('_')[-1]))
+        print(rch_df.sp)
+        td = pd.to_timedelta(rch_df.sp.values,unit='d')
+        rch_df.loc[:,"datetime"] = pd.to_datetime("12-31-2017") + td
+        rch_df.sort_values(by="sp",inplace=True)
+        stop = pd.to_datetime("1-1-2020")
+        mn_range = pd.date_range(pd.to_datetime("12-31-2017"),stop,freq='m')
+        print(mn_range)
+        ss_rch_filename = rch_df.filename[0]
+        shutil.copy2(os.path.join(daily_ws,ss_rch_filename),os.path.join(new_ws,ss_rch_filename))
+        for kper,(start,end) in enumerate(zip(mn_range[:-1],mn_range[1:])):
+            mn_rch_df = rch_df.loc[rch_df.datetime.apply(lambda x: x > start and x <= end),:]
+            print(start,end,mn_rch_df)
+            tot = 0.0
+            for filename in mn_rch_df.filename:
+                arr = np.loadtxt(os.path.join(daily_ws,filename))
+                tot += arr.mean()
+            mn_rch_mean = tot / mn_rch_df.shape[0]
+            mn_arr = np.zeros((m.dis.nrow.data,m.dis.ncol.data)) + mn_rch_mean
+            np.savetxt(os.path.join(new_ws,"freyberg6.rch_recharge_{0}.txt".format(kper+1)),mn_arr,fmt="%15.6E")
+        pyemu.os_utils.run("mf6", cwd=new_ws)
 
 def setup_interface(org_ws,num_reals=100):
     
@@ -313,6 +341,11 @@ def make_kickass_figs():
         ax = axes[i]
         [ax.plot(c.time.values,oe_c_g.loc[i,:].values,color='b',alpha=0.5,lw=0.2) for i in oe_c_g.index]
         ax.plot(f.time.values,tr,color="r",lw=1.5)
+
+        up = oe_c_g.mean() + (3 * oe_c_g.std())
+        ax.plot(c.time.values, up.values,color="b",lw=1.0,ls="--")
+
+
         #[print(f.time.values, oe_f_g.loc[i, :].values) for i in oe_f_g.index]
         ax.set_ylabel("simulated groundwater level ($L$)")
         ax.set_xlabel("simulation time ($T$)")
@@ -320,6 +353,8 @@ def make_kickass_figs():
         ax = axes[i+1]
         [ax.plot(f.time.values, oe_f_g.loc[i, :].values, color='g', alpha=0.5, lw=0.2) for i in oe_f_g.index]
         ax.plot(f.time.values, tr, color="r", lw=1.5)
+        up = oe_f_g.mean() + (3 * oe_f_g.std())
+        ax.plot(f.time.values, up.values, color="g", lw=1.0, ls="--")
         ax.set_ylabel("simulated groundwater level ($L$)")
         ax.set_xlabel("simulation time ($T$)")
         ax.set_title("{0}) {1} higher resolution".format(abet[i],label),loc="left")
@@ -328,6 +363,11 @@ def make_kickass_figs():
     tr = oe_f.loc[:,gage_f.obsnme].iloc[0,:].values.copy()
     tr += (tr * 0.05 * np.random.normal(0,1,tr.shape[0]))
     [axes[-2].plot(gage_c.time.values,oe_c.loc[i,gage_c.obsnme].values,color='b',alpha=0.5,lw=0.2) for i in oe_c.index]
+    up = oe_c.loc[:,gage_c.obsnme].mean() + (3 * oe_c.loc[:,gage_c.obsnme].std())
+    axes[-2].plot(gage_c.time.values, up.values, color="b", lw=1.0, ls="--")
+
+
+
     axes[-2].plot(gage_f.time.values,tr,color='r',lw=1.5)
     axes[-2].set_ylabel("simulated surface water flow ($\\frac{L^3}{T}$)")
     axes[-2].set_xlabel("simulation time ($T$)")
@@ -336,6 +376,9 @@ def make_kickass_figs():
 
     [axes[-1].plot(gage_f.time.values, oe_f.loc[i, gage_f.obsnme].values, color='g', alpha=0.5, lw=0.2) for i in
      oe_f.index]
+    up = oe_f.loc[:, gage_f.obsnme].mean() + (3 * oe_f.loc[:, gage_f.obsnme].std())
+    axes[-1].plot(gage_f.time.values, up.values, color="g", lw=1.0, ls="--")
+
     axes[-1].plot(gage_f.time.values, tr, color='r', lw=1.5)
     axes[-1].set_ylabel("simulated surfacewaer flow ($\\frac{L^3}{T}$)")
     axes[-1].set_xlabel("simulation time ($T$)")
@@ -407,13 +450,13 @@ def write_par_sum(pst_file):
 
 if __name__ == "__main__":
 
-    # prep_mf6_model("temp_monthly")
-    #setup_interface("temp_monthly_test",num_reals=100)
-    #run_prior_mc("monthly_template")
+    prep_mf6_model("temp_monthly")
+    setup_interface("temp_monthly_test",num_reals=100)
+    run_prior_mc("monthly_template")
     #
-    #prep_mf6_model("temp_daily")
-    #setup_interface("temp_daily_test",num_reals=100)
-    #run_prior_mc("daily_template")
+    prep_mf6_model("temp_daily")
+    setup_interface("temp_daily_test",num_reals=100)
+    run_prior_mc("daily_template")
 
     make_kickass_figs()
     #write_par_sum(os.path.join("monthly_master","freyberg.pst"))
