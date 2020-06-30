@@ -27,7 +27,7 @@ def prep_mf6_model(org_ws):
     #if not os.path.exists(os.path.join(org_ws,"freyberg6.nam")):
     if True:
         #first mod the nam file and the dumbass last reach bottom - sigh
-        m = flopy.modflow.Modflow.load("freyberg.nam",model_ws=org_ws,check=False)
+        m = flopy.modflow.Modflow.load("freyberg.nam",model_ws=org_ws,check=False, verbose=True)
         print(m.sfr.reach_data.dtype)
         last_reach_bot = m.sfr.reach_data["strtop"][-1] - m.sfr.reach_data["strthick"][-1]
         cell_bot = m.dis.botm[0].array[m.sfr.reach_data["i"][-1],m.sfr.reach_data["j"][-1]]
@@ -105,6 +105,8 @@ def prep_mf6_model(org_ws):
     #shutil.copy2(os.path.join(org_ws,"mf6.exe"),os.path.join(new_ws,"mf6.exe"))
     pyemu.os_utils.run("mf6",cwd=new_ws)
     #ext_dict = {""}
+
+
 
     if "monthly" in org_ws:
         # sample the recharge arrays from the daily model to the monthly model
@@ -451,14 +453,14 @@ def write_par_sum(pst_file):
 if __name__ == "__main__":
 
     prep_mf6_model("temp_monthly")
-    setup_interface("temp_monthly_test",num_reals=100)
-    run_prior_mc("monthly_template")
+    # setup_interface("temp_monthly_test",num_reals=100)
+    # run_prior_mc("monthly_template")
+    # #
+    #prep_mf6_model("temp_daily")
+    # setup_interface("temp_daily_test",num_reals=100)
+    # run_prior_mc("daily_template")
     #
-    prep_mf6_model("temp_daily")
-    setup_interface("temp_daily_test",num_reals=100)
-    run_prior_mc("daily_template")
-
-    make_kickass_figs()
+    # make_kickass_figs()
     #write_par_sum(os.path.join("monthly_master","freyberg.pst"))
     #write_par_sum(os.path.join("daily_master", "freyberg.pst"))
 
