@@ -493,12 +493,13 @@ def write_par_sum(pst_file):
 
 
 if __name__ == "__main__":
-
-    # prep_mf6_model("temp_monthly")
-    # setup_interface("temp_monthly_test",num_reals=100)
-    # run_prior_mc("monthly_template")
+    daily has to go first for recharge sampling in monthly
+    prep_mf6_model("temp_daily")
+    prep_mf6_model("temp_monthly")
+    setup_interface("temp_monthly_test",num_reals=100)
+    run_prior_mc("monthly_template")
     # #
-    # prep_mf6_model("temp_daily")
+
     setup_interface("temp_daily_test",num_reals=100)
     run_prior_mc("daily_template")
     #
