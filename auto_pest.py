@@ -137,7 +137,7 @@ def prep_mf6_model(org_ws):
         pyemu.os_utils.run("mf6", cwd=new_ws)
 
 def setup_interface(org_ws,num_reals=100):
-    
+    np.random.seed(123456)
     sim = flopy.mf6.MFSimulation.load(sim_ws=org_ws)
     m = sim.get_model("freyberg6")
     redis_fac = m.dis.nrow.data / 40
@@ -452,15 +452,15 @@ def write_par_sum(pst_file):
 
 if __name__ == "__main__":
 
-    prep_mf6_model("temp_monthly")
+    # prep_mf6_model("temp_monthly")
     # setup_interface("temp_monthly_test",num_reals=100)
     # run_prior_mc("monthly_template")
     # #
-    #prep_mf6_model("temp_daily")
-    # setup_interface("temp_daily_test",num_reals=100)
-    # run_prior_mc("daily_template")
+    # prep_mf6_model("temp_daily")
+    setup_interface("temp_daily_test",num_reals=100)
+    run_prior_mc("daily_template")
     #
-    # make_kickass_figs()
+    make_kickass_figs()
     #write_par_sum(os.path.join("monthly_master","freyberg.pst"))
     #write_par_sum(os.path.join("daily_master", "freyberg.pst"))
 
