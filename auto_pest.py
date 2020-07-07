@@ -52,7 +52,7 @@ def prep_mf6_model(org_ws):
                 f.write(line)
         pyemu.os_utils.run("mf5to6 freyberg_mod.nam freyberg6",cwd=org_ws)
 
-    new_ws = org_ws + "_test"
+    new_ws = org_ws + "_mf6"
     if os.path.exists(new_ws):
         shutil.rmtree(new_ws)
     os.mkdir(new_ws)
@@ -493,7 +493,7 @@ def write_par_sum(pst_file):
 
 
 if __name__ == "__main__":
-    daily has to go first for recharge sampling in monthly
+    #daily has to go first for recharge sampling in monthly
     prep_mf6_model("temp_daily")
     prep_mf6_model("temp_monthly")
     setup_interface("temp_monthly_test",num_reals=100)
