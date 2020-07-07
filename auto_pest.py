@@ -152,7 +152,7 @@ def setup_interface(org_ws,num_reals=100):
     # instantiate PstFrom object
     pf = pyemu.prototypes.PstFrom(original_d=org_ws, new_d=template_ws,
                  remove_existing=True,
-                 longnames=True, spatial_reference=m.model_grid,
+                 longnames=True, spatial_reference=m.modelgrid,
                  zero_based=False,start_datetime="1-1-2018")
     
     # add observations from the sfr observation output file
@@ -494,16 +494,16 @@ def write_par_sum(pst_file):
 
 if __name__ == "__main__":
     #daily has to go first for recharge sampling in monthly
-    prep_mf6_model("temp_daily")
-    prep_mf6_model("temp_monthly")
-    setup_interface("temp_monthly_test",num_reals=100)
-    run_prior_mc("monthly_template")
+    #prep_mf6_model("temp_daily")
+    #prep_mf6_model("temp_monthly")
+    setup_interface("temp_monthly_mf6",num_reals=100)
+    #run_prior_mc("monthly_template")
     # #
 
-    setup_interface("temp_daily_test",num_reals=100)
-    run_prior_mc("daily_template")
+    #setup_interface("temp_daily_test",num_reals=100)
+    #run_prior_mc("daily_template")
     #
-    make_kickass_figs()
+    #make_kickass_figs()
     #write_par_sum(os.path.join("monthly_master","freyberg.pst"))
     #write_par_sum(os.path.join("daily_master", "freyberg.pst"))
 
