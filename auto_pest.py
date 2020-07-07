@@ -110,7 +110,7 @@ def prep_mf6_model(org_ws):
 
     if "monthly" in org_ws:
         # sample the recharge arrays from the daily model to the monthly model
-        daily_ws = "temp_daily_test"
+        daily_ws = "temp_daily_mf6"
         assert os.path.exists(daily_ws)
         rch_files = [f for f in os.listdir(daily_ws) if "rch_recharge_" in f and f.endswith(".txt")]
         rch_df = pd.DataFrame({"filename":rch_files})
