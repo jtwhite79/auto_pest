@@ -150,7 +150,7 @@ def setup_interface(org_ws,num_reals=100):
     
     
     # instantiate PstFrom object
-    pf = pyemu.prototypes.PstFrom(original_d=org_ws, new_d=template_ws,
+    pf = pyemu.utils.PstFrom(original_d=org_ws, new_d=template_ws,
                  remove_existing=True,
                  longnames=True, spatial_reference=m.modelgrid,
                  zero_based=False,start_datetime="1-1-2018")
